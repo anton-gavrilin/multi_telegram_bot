@@ -395,9 +395,9 @@ class TelegramBot:
             await self.update.message.reply_text(start_init_text)
         else:
             completion = openai.Completion.create(
-                engine="text-davinci-002",
+                engine="text-davinci-003",
                 prompt=message,
-                max_tokens=128,
+                max_tokens=4000,
                 temperature=0.5,
             )
             ai_text = completion.choices[0].text
