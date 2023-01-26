@@ -6,6 +6,7 @@ import random
 import time
 
 import openai
+import requests
 
 from telegram import *
 from telegram.ext import *
@@ -20,41 +21,7 @@ from password_manager import PasswordManager
 from questionnaire_bot import QueBot
 from utils import Notifier, get_week_day
 from other_files.constants import telegram_token, openai_key
-
-keyboards_buttons = ["Random number", "Throw dice", "Random person", "Random image"]
-random_person_image = "https://thispersondoesnotexist.com/image"
-random_image = "https://picsum.photos/1200"
-openai.api_key = openai_key
-
-additional_que = QueBot(
-    ["Go", "Python", "Java", "C++", "JavaScript", "Fortran"],
-    "Please choose your programming languages: ",
-    "Chosen programming languages")
-
-password_init_text = """Write in format:
-        *site* = *password* (Add password)
-        get *site* (Get password)
-        get (Get all passwords)
-        delete *site* (Delete password)
-        delete (Delete all passwords)
-        q (Quit)"""
-
-translate_init_text = """Write in format:
-        *source* to *destination*"""
-
-currency_init_text = """Write in format:
-        *currency* to *currency* : *amount*
-        *currency* to *currency* in *year* : *amount*"""
-
-notify_init_text = """Write in format:
-        *week day* **:** - time when notify
-        *amount* minute - every amount minute notify
-        *amount* second - every amount second notify
-        *amount* hour - every amount hour notify
-        quit - Quit from notifier
-        stop - stop all alerts"""
-
-start_init_text = "Let's do something, choose a command, ma friend 😶‍🌫️🤯🤩😎👺👾🤖💪🤙👀👮‍♂️🐲🌚🌝🦍🐊🐅"
+from other_files.texts import *
 
 # Commands:
 # chat_gpt - OpenAI chatGPT bot which answer to every question
@@ -66,6 +33,15 @@ start_init_text = "Let's do something, choose a command, ma friend 😶‍🌫�
 # currency_exchange - Actions with currencies
 # passwords - Handle passwords (encrypt and hold)
 # notifier - Notify in special time or every period of time
+
+random_person_image = "https://thispersondoesnotexist.com/image"
+random_image = "https://picsum.photos/1200"
+openai.api_key = openai_key
+
+additional_que = QueBot(
+    ["Go", "Python", "Java", "C++", "JavaScript", "Fortran"],
+    "Please choose your programming languages: ",
+    "Chosen programming languages")
 
 
 class TelegramBot:
@@ -278,36 +254,50 @@ class TelegramBot:
         message = self.update.message.text
         user = self.update.effective_user.username
 
-        if message in keyboards_buttons or self.check_random:
-            if message == "Throw dice":
-                await self.update.message.reply_dice(emoji="🎲")
-                text = f"Dice is thrown, you can see result!"
-                self.print_text = f"[Buttons] {user} throw dice"
-            elif message == "Random number" or self.check_random:
-                if self.check_random:
-                    await self.update.message.reply_dice(emoji="🎲")
-                    number1, number2 = message.split(" to ")
-                    random_num = random.randint(int(number1), int(number2))
-                    text = f"Your number: {random_num}"
-                    time.sleep(4)
-                    self.print_text = f"[Buttons] {user} get random number: {random_num}"
-                else:
-                    text = "Write frames in format:\n*number 1* to *number 2*"
-                self.check_random = not self.check_random
-            else:
-                text = "Rate the photo"
-                self.markup = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("👍", callback_data="like")],
-                    [InlineKeyboardButton("👎", callback_data="dislike")]])
+        if message in chatgpt_features_keyboard_buttons:
+            await self.chatgpt_keyboard_handle()
+        elif message in chatgpt_text_keyboard_buttons:
+            await self.chatgpt_text_keyboard_handle()
+        elif message in chatgpt_code_keyboard_buttons:
+            await self.chatgpt_code_keyboard_handle()
+        elif message in chatgpt_image_keyboard_buttons:
+            await self.chatgpt_image_keyboard_handle()
+        elif message in keyboard_buttons or self.check_random:
+            text = await self.message_keyboard_handle()
+        return text
 
-                if message == "Random image":
-                    image = requests.get(random_image).content
-                    self.print_text = f"[Buttons] {user} want a random image"
-                else:
-                    image = requests.get(random_person_image).content
-                    self.print_text = f"[Buttons] {user} want a random person image"
-                media_photo = InputMediaPhoto(image, caption="")
-                await self.context.bot.sendMediaGroup(chat_id=self.update.effective_chat.id, media=[media_photo])
+    async def message_keyboard_handle(self):
+        message = self.update.message.text
+        user = self.update.effective_user.username
+
+        if message == "Throw dice":
+            await self.update.message.reply_dice(emoji="🎲")
+            text = f"Dice is thrown, you can see result!"
+            self.print_text = f"[Buttons] {user} throw dice"
+        elif message == "Random number" or self.check_random:
+            if self.check_random:
+                await self.update.message.reply_dice(emoji="🎲")
+                number1, number2 = message.split(" to ")
+                random_num = random.randint(int(number1), int(number2))
+                text = f"Your number: {random_num}"
+                time.sleep(4)
+                self.print_text = f"[Buttons] {user} get random number: {random_num}"
+            else:
+                text = "Write frames in format:\n*number 1* to *number 2*"
+            self.check_random = not self.check_random
+        else:
+            text = "Rate the photo"
+            self.markup = InlineKeyboardMarkup([
+                [InlineKeyboardButton("👍", callback_data="like")],
+                [InlineKeyboardButton("👎", callback_data="dislike")]])
+
+            if message == "Random image":
+                image = requests.get(random_image).content
+                self.print_text = f"[Buttons] {user} want a random image"
+            else:
+                image = requests.get(random_person_image).content
+                self.print_text = f"[Buttons] {user} want a random person image"
+            await self.update.message.reply_photo(photo=image)
         return text
 
     async def time_notify(self, update, context):
@@ -386,22 +376,123 @@ class TelegramBot:
 
     async def openai_chatgpt(self, update, context):
         self.chatgpt = True
-        await update.message.reply_text("Write anything what you want and AI will answer\nFor quit write: q")
+        buttons = [
+            [KeyboardButton(chatgpt_features_keyboard_buttons[0]), KeyboardButton(chatgpt_features_keyboard_buttons[1])],
+            [KeyboardButton(chatgpt_features_keyboard_buttons[2])],
+        ]
+        await update.message.reply_text(text=chatgpt_init_text,
+                                             reply_markup=ReplyKeyboardMarkup(buttons, one_time_keyboard=True))
 
     async def chatgpt_handle(self):
         message = self.update.message.text
-        if message == "q":
-            self.chatgpt = False
-            await self.update.message.reply_text(start_init_text)
-        else:
-            completion = openai.Completion.create(
-                engine="text-davinci-003",
-                prompt=message,
-                max_tokens=4000,
-                temperature=0.5,
-            )
-            ai_text = completion.choices[0].text
-            await self.update.message.reply_text(ai_text)
+        if message not in chatgpt_features_keyboard_buttons \
+                and message not in chatgpt_text_keyboard_buttons \
+                and message not in chatgpt_code_keyboard_buttons\
+                and message not in chatgpt_image_keyboard_buttons:
+
+            if message == "q":
+                self.chatgpt = False
+                await self.update.message.reply_text(start_init_text)
+                return
+            elif message.lower().startswith("image: "):
+                image_text = message.split("image: ")[1]
+                response = openai.Image.create(
+                    prompt=image_text,
+                    n=1,
+                    size="1024x1024"
+                )
+                image_url = response['data'][0]['url']
+                await self.update.message.reply_photo(photo=image_url,
+                                                      reply_markup=ReplyKeyboardMarkup(self.get_chatgpt_features_buttons(), one_time_keyboard=True))
+            else:
+                completion = openai.Completion.create(
+                    engine="text-davinci-003",
+                    prompt=message,
+                    max_tokens=4000,
+                    temperature=0.9,
+                )
+                ai_text = completion.choices[0].text
+
+                await self.update.message.reply_text(text=ai_text,
+                                                     reply_markup=ReplyKeyboardMarkup(self.get_chatgpt_features_buttons(), one_time_keyboard=True))
+
+    async def chatgpt_keyboard_handle(self):
+        message = self.update.message.text
+        buttons = []
+        if message == "Text completion":
+            buttons = [
+                [KeyboardButton(chatgpt_text_keyboard_buttons[0]), KeyboardButton(chatgpt_text_keyboard_buttons[1])],
+                [KeyboardButton(chatgpt_text_keyboard_buttons[2]), chatgpt_text_keyboard_buttons[3]],
+                [KeyboardButton(chatgpt_text_keyboard_buttons[4]), chatgpt_text_keyboard_buttons[5]]
+            ]
+        elif message == "Code completion":
+            buttons = [
+                [KeyboardButton(chatgpt_code_keyboard_buttons[0]), KeyboardButton(chatgpt_code_keyboard_buttons[1])],
+                [KeyboardButton(chatgpt_code_keyboard_buttons[2])]
+            ]
+        elif message == "Image generation":
+            buttons = [
+                [KeyboardButton(chatgpt_image_keyboard_buttons[0]), KeyboardButton(chatgpt_image_keyboard_buttons[1])],
+                [KeyboardButton(chatgpt_image_keyboard_buttons[2])]
+            ]
+
+        await self.update.message.reply_text(text="Choose which command you would like to describe",
+                                             reply_markup=ReplyKeyboardMarkup(buttons, one_time_keyboard=True))
+
+    async def chatgpt_text_keyboard_handle(self):
+        text = ""
+        message = self.update.message.text
+
+        if message == "Classification":
+            text = chatgpt_text_classification
+        elif message == "Generation":
+            text = chatgpt_text_generation
+        elif message == "Conversation":
+            text = chatgpt_text_conversation
+        elif message == "Translation":
+            text = chatgpt_text_translation
+        elif message == "Conversion":
+            text = chatgpt_text_conversion
+        elif message == "Summarization":
+            text = chatgpt_text_summarization
+
+        await self.update.message.reply_text(text=text,
+                                             reply_markup=ReplyKeyboardMarkup(self.get_chatgpt_features_buttons(), one_time_keyboard=True))
+
+    async def chatgpt_code_keyboard_handle(self):
+        text = ""
+        message = self.update.message.text
+
+        if message == "Create":
+            text = chatgpt_code_create
+        elif message == "Explain":
+            text = chatgpt_code_explain
+        elif message == "Edit":
+            text = chatgpt_code_edit
+
+        await self.update.message.reply_text(text=text,
+                                             reply_markup=ReplyKeyboardMarkup(self.get_chatgpt_features_buttons(), one_time_keyboard=True))
+
+    async def chatgpt_image_keyboard_handle(self):
+        text = ""
+        message = self.update.message.text
+
+        if message == "Generate":
+            text = chatgpt_image_generate
+        elif message == "Edits":
+            text = chatgpt_image_edits
+        elif message == "Variation":
+            text = chatgpt_image_variation
+
+        await self.update.message.reply_text(text=text,
+                                             reply_markup=ReplyKeyboardMarkup(self.get_chatgpt_features_buttons(),
+                                                                              one_time_keyboard=True))
+
+    def get_chatgpt_features_buttons(self):
+        return [
+            [KeyboardButton(chatgpt_features_keyboard_buttons[0]), KeyboardButton(chatgpt_features_keyboard_buttons[1])],
+            [KeyboardButton(chatgpt_features_keyboard_buttons[2])],
+        ]
 
 
 if __name__ == '__main__':
